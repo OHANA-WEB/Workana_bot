@@ -15,6 +15,7 @@ a = Analysis(
         'playwright._impl._driver',
         'playwright._impl._api_structures',
         'httpx',
+        'openai',
         'dotenv',
         'json',
         'html',

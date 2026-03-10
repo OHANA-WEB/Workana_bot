@@ -1,11 +1,19 @@
 """
-Generate a bid using the local llama-server chat completions API.
+Generate a bid using OpenAI API or local llama-server chat completions API.
+Uses OPENAI_API_KEY when set; otherwise uses LLAMA_SERVER_URL.
 """
 from __future__ import annotations
 
 import httpx
 
-from config import LLAMA_SERVER_URL, LLAMA_TIMEOUT
+from config import (
+    LLAMA_SERVER_URL,
+    LLAMA_TIMEOUT,
+    OPENAI_API_KEY,
+    OPENAI_BASE_URL,
+    OPENAI_MODEL,
+    OPENAI_TIMEOUT,
+)
 
 SYSTEM_PROMPT_1 = """=========================================
 This is a workana job posting.
@@ -48,18 +56,38 @@ Format rules:
 """
 
 
-def generate_bid(job_title: str, job_description: str, model: str = "", system_prompt: str | None = None) -> str:
-    """
-    Call local llama-server to generate a bid for the given job.
-    job_description can be the snippet from the listing or full text.
-    system_prompt: use SYSTEM_PROMPT_1 (account 1) or SYSTEM_PROMPT_2 (account 2). Default: account 1.
-    """
-    prompt = system_prompt if system_prompt is not None else SYSTEM_PROMPT_1
+def _generate_bid_openai(job_title: str, job_description: str, system_prompt: str) -> str:
+    """Generate bid using OpenAI API."""
+    from openai import OpenAI
+
+    client = OpenAI(
+        api_key=OPENAI_API_KEY,
+        base_url=OPENAI_BASE_URL if OPENAI_BASE_URL else None,
+    )
+    response = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": f"Job title: {job_title}\n\nJob description:\n{job_description}",
+            },
+        ],
+        max_tokens=1024,
+        temperature=0.7,
+        timeout=float(OPENAI_TIMEOUT),
+    )
+    message = response.choices[0].message if response.choices else None
+    return (message.content or "").strip() if message else ""
+
+
+def _generate_bid_llama(job_title: str, job_description: str, model: str, system_prompt: str) -> str:
+    """Generate bid using local llama-server."""
     url = f"{LLAMA_SERVER_URL}/v1/chat/completions"
     payload = {
         "model": model or "default",
         "messages": [
-            {"role": "system", "content": prompt},
+            {"role": "system", "content": system_prompt},
             {
                 "role": "user",
                 "content": f"Job title: {job_title}\n\nJob description:\n{job_description}",
@@ -79,3 +107,15 @@ def generate_bid(job_title: str, job_description: str, model: str = "", system_p
     choice = data.get("choices", [{}])[0]
     message = choice.get("message", {})
     return (message.get("content") or "").strip()
+
+
+def generate_bid(job_title: str, job_description: str, model: str = "", system_prompt: str | None = None) -> str:
+    """
+    Generate a bid for the given job using OpenAI (if OPENAI_API_KEY is set) or local llama-server.
+    job_description can be the snippet from the listing or full text.
+    system_prompt: use SYSTEM_PROMPT_1 (account 1) or SYSTEM_PROMPT_2 (account 2). Default: account 1.
+    """
+    prompt = system_prompt if system_prompt is not None else SYSTEM_PROMPT_1
+    if OPENAI_API_KEY:
+        return _generate_bid_openai(job_title, job_description, prompt)
+    return _generate_bid_llama(job_title, job_description, model or "default", prompt)

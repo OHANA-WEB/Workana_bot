@@ -23,6 +23,8 @@ from config import (
     DISCORD_WEBHOOK_BIDS_2,
     DISCORD_WEBHOOK_JOBS,
     LLAMA_SERVER_URL,
+    OPENAI_API_KEY,
+    OPENAI_MODEL,
     POLL_INTERVAL,
     SEEN_JOBS_FILE,
 )
@@ -120,7 +122,10 @@ def run_bid(job_title: str, job_url: str, description: str | None = None, accoun
         sys.exit(1)
     desc = description or f"Job: {job_title}"
     print(f"Generating bid for: {job_title} (account {account})")
-    print(f"Using LLM at {LLAMA_SERVER_URL}...")
+    if OPENAI_API_KEY:
+        print(f"Using OpenAI ({OPENAI_MODEL})...")
+    else:
+        print(f"Using LLM at {LLAMA_SERVER_URL}...")
     try:
         bid_text = generate_bid(job_title, desc, system_prompt=prompt)
     except Exception as e:
